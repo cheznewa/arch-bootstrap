@@ -49,17 +49,17 @@ extract_href() {
 }
 
 fetch() {
-  curl -L -s "$@"
+  curl -L "$@"
 }
 
 fetch_file() {
   local FILEPATH=$1
   shift
   if [[ -e "$FILEPATH" ]]; then
-    # curl -sL -z "$FILEPATH" -o "$FILEPATH" "$@"
+    # curl -L -z "$FILEPATH" -o "$FILEPATH" "$@"
     echo "$FILEPATH already exists, skipping..."
   else
-    curl -sL -o "$FILEPATH" "$@"
+    curl -L -o "$FILEPATH" "$@"
   fi
 }
 
@@ -71,6 +71,8 @@ uncompress() {
       bsdtar -C "$DEST" -xzf "$FILEPATH";;
     *.xz) 
       xz -dc "$FILEPATH" | bsdtar -C "$DEST" -xf-;;
+    *.zst) 
+      zstd -dc "$FILEPATH" | bsdtar -C "$DEST" -xf-;;
     *) 
       debug "Error: unknown package format: $FILEPATH"
       return 1;;
@@ -151,7 +153,7 @@ install_pacman_packages() {
   debug "pacman package and dependencies: $BASIC_PACKAGES"
   
   for PACKAGE in $BASIC_PACKAGES; do
-    local FILE=$(echo "$LIST" | grep -m1 "^$PACKAGE-[[:digit:]].*\(\.gz\|\.xz\)$")
+    local FILE=$(echo "$LIST" | grep -m1 "^$PACKAGE-[[:digit:]].*\(\.gz\|\.xz\|\.zst\)$")
     test "$FILE" || { debug "Error: cannot find package: $PACKAGE"; return 1; }
     local FILEPATH="$DOWNLOAD_DIR/$FILE"
     
@@ -174,7 +176,7 @@ configure_static_qemu() {
 install_packages() {
   local ARCH=$1 DEST=$2 PACKAGES=$3
   debug "install packages: $PACKAGES"
-  LC_ALL=C arch-chroot "$DEST" /usr/bin/pacman \
+  LC_ALL=C chroot "$DEST" /usr/bin/pacman \
     --noconfirm --arch $ARCH -Sy --overwrite '/*' $PACKAGES
 }
 
@@ -230,7 +232,7 @@ main() {
   debug "Done!"
   debug 
   debug "You may now chroot or arch-chroot from package arch-install-scripts:"
-  debug "$ sudo arch-chroot $DEST"
+  debug "$ sudo jchroot $DEST"
 }
 
 main "$@"
