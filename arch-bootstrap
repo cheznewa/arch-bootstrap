@@ -22,11 +22,10 @@ set -e -u -o pipefail
 
 # Packages needed by pacman (see get-pacman-dependencies)
 PACMAN_PACKAGES=(
-  base bash readline ncurses util-linux coreutils libcap iputils which grep sudo
   acl archlinux-keyring attr bzip2 curl expat glibc gpgme libarchive
   libassuan libgpg-error libnghttp2 libssh2 lzo openssl pacman pacman-mirrorlist xz zlib
   krb5 e2fsprogs keyutils libidn2 libunistring gcc-libs lz4 libpsl icu libunistring zstd
-  openssl nss nspr
+  nano 
 )
 # base base-devel linux-headers
 BASIC_PACKAGES=(${PACMAN_PACKAGES[*]} filesystem)
@@ -232,7 +231,7 @@ main() {
   debug "Done!"
   debug 
   debug "You may now chroot or arch-chroot from package arch-install-scripts:"
-  debug "$ sudo jchroot $DEST"
+  debug "$ sudo jchroot $DEST bash"
 }
 
 main "$@"
