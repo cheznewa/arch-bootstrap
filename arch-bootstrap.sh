@@ -28,8 +28,9 @@ PACMAN_PACKAGES=(
 )
 BASIC_PACKAGES=(${PACMAN_PACKAGES[*]} filesystem)
 EXTRA_PACKAGES=(coreutils bash grep gawk file tar systemd sed)
-DEFAULT_REPO_URL="http://mirrors.kernel.org/archlinux"
+DEFAULT_REPO_URL="http://de.mirrors.kernel.org/archlinux"
 DEFAULT_ARM_REPO_URL="http://mirror.archlinuxarm.org"
+DEFAULT_POWER_REPO_URL="http://repo.archlinuxpower.org/base/"
 
 stderr() { 
   echo "$@" >&2 
@@ -79,6 +80,9 @@ get_default_repo() {
   local ARCH=$1
   if [[ "$ARCH" == arm* || "$ARCH" == aarch64 ]]; then
     echo $DEFAULT_ARM_REPO_URL
+
+  elif [[ "$ARCH" == power* || "$ARCH" == riscv64 ]]; then
+    echo $DEFAULT_POWER_REPO_URL
   else
     echo $DEFAULT_REPO_URL
   fi
@@ -88,6 +92,9 @@ get_core_repo_url() {
   local REPO_URL=$1 ARCH=$2
   if [[ "$ARCH" == arm* || "$ARCH" == aarch64 ]]; then
     echo "${REPO_URL%/}/$ARCH/core"
+
+  elif [[ "$ARCH" == power* || "$ARCH" == riscv64 ]]; then
+    echo "${REPO_URL%/}"
   else
     echo "${REPO_URL%/}/core/os/$ARCH"
   fi
@@ -97,6 +104,9 @@ get_template_repo_url() {
   local REPO_URL=$1 ARCH=$2
   if [[ "$ARCH" == arm* || "$ARCH" == aarch64 ]]; then
     echo "${REPO_URL%/}/$ARCH/\$repo"
+
+  elif [[ "$ARCH" == power* || "$ARCH" == riscv64 ]]; then
+    echo "${REPO_URL%/}"
   else
     echo "${REPO_URL%/}/\$repo/os/$ARCH"
   fi
@@ -107,6 +117,7 @@ configure_pacman() {
   debug "configure DNS and pacman"
   cp "/etc/resolv.conf" "$DEST/etc/resolv.conf"
   SERVER=$(get_template_repo_url "$REPO_URL" "$ARCH")
+  mkdir -p "$DEST/etc/pacman.d"
   echo "Server = $SERVER" > "$DEST/etc/pacman.d/mirrorlist"
 }
 
@@ -137,10 +148,25 @@ fetch_packages_list() {
 }
 
 install_pacman_packages() {
-  local BASIC_PACKAGES=$1 DEST=$2 LIST=$3 DOWNLOAD_DIR=$4
+  local BASIC_PACKAGES=$1 DEST=$2 LIST=$3 DOWNLOAD_DIR=$4 ARCH=$5
   debug "pacman package and dependencies: $BASIC_PACKAGES"
   
   for PACKAGE in $BASIC_PACKAGES; do
+  if [[ "$ARCH" == power* || "$ARCH" == riscv64 ]]; then
+    local FILE=$(echo "$LIST" | grep -m1 "^$PACKAGE-[[:digit:]].*\(\.gz\|\.xz\|\.zst\)$")
+    test "$FILE" || { debug "Error: cannot find package: $PACKAGE"; return 1; }
+    local FILEPATH="$DOWNLOAD_DIR/$FILE"
+    
+    if grep -m1 "\-any" <<< "$FILE" ; then
+     debug "download package: $REPO/any/$FILE"
+     fetch_file "$FILEPATH" "$REPO/any/$FILE"
+    else
+     debug "download package: $REPO/$ARCH/$FILE"
+     fetch_file "$FILEPATH" "$REPO/$ARCH/$FILE"
+    fi
+    debug "uncompress package: $FILEPATH"
+    uncompress "$FILEPATH" "$DEST"
+   else
     local FILE=$(echo "$LIST" | grep -m1 "^$PACKAGE-[[:digit:]].*\(\.gz\|\.xz\|\.zst\)$")
     test "$FILE" || { debug "Error: cannot find package: $PACKAGE"; return 1; }
     local FILEPATH="$DOWNLOAD_DIR/$FILE"
@@ -149,6 +175,7 @@ install_pacman_packages() {
     fetch_file "$FILEPATH" "$REPO/$FILE"
     debug "uncompress package: $FILEPATH"
     uncompress "$FILEPATH" "$DEST"
+    fi
   done
 }
 
@@ -164,12 +191,15 @@ configure_static_qemu() {
 install_packages() {
   local ARCH=$1 DEST=$2 PACKAGES=$3
   debug "install packages: $PACKAGES"
+  if [[ "$ARCH" == power* || "$ARCH" == riscv64 ]]; then
+   LC_ALL=C chroot "$DEST" /usr/bin/bash /usr/bin/update-ca-trust
+  fi
   LC_ALL=C chroot "$DEST" /usr/bin/pacman \
     --noconfirm --arch $ARCH -Sy --overwrite \* $PACKAGES
 }
 
 show_usage() {
-  stderr "Usage: $(basename "$0") [-u USER] [-q] [-a i686|x86_64|arm] [-r REPO_URL] [-d DOWNLOAD_DIR] DESTDIR"
+  stderr "Usage: $(basename "$0") [-u USER] [-q] [-a i686|x86_64|arm|powerpc|riscv64] [-r REPO_URL] [-d DOWNLOAD_DIR] DESTDIR"
 }
 
 add_user()
@@ -219,8 +249,19 @@ main() {
   
   # Fetch packages, install system and do a minimal configuration
   mkdir -p "$DEST"
+  if [[ "$ARCH" == power* || "$ARCH" == riscv64 ]]; then
+  BASIC_PACKAGES=(
+  acl archpower-keyring attr brotli bzip2 curl expat glibc gpgme libarchive
+  libassuan libgpg-error libnghttp2 libssh2 lzo openssl pacman xz zlib filesystem
+  krb5 e2fsprogs keyutils libidn2 libunistring gcc-libs lz4 libpsl icu libunistring zstd sudo
+  ca-certificates-utils ca-certificates-mozilla bash readline ncurses coreutils findutils # certificate probleme
+  p11-kit libp11-kit libtasn1 libffi # p11-kit and dependances
+  )
+  local LIST="$(fetch_packages_list $REPO/$ARCH) $(fetch_packages_list $REPO/any)"
+  else
   local LIST=$(fetch_packages_list $REPO)
-  install_pacman_packages "${BASIC_PACKAGES[*]}" "$DEST" "$LIST" "$DOWNLOAD_DIR"
+  fi
+  install_pacman_packages "${BASIC_PACKAGES[*]}" "$DEST" "$LIST" "$DOWNLOAD_DIR" "$ARCH"
   configure_pacman "$DEST" "$ARCH"
   configure_minimal_system "$DEST"
   [[ -n "$USE_QEMU" ]] && configure_static_qemu "$ARCH" "$DEST"
