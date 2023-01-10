@@ -7,7 +7,7 @@
 #
 # Install:
 #
-#   # install -m 755 arch-bootstrap-steamdeck.sh /usr/local/bin/arch-bootstrap
+#   # install -m 755 arch-bootstrap-steamdeck.sh /usr/local/bin/arch-bootstrap-steamdeck
 #
 # Usage:
 #
@@ -92,12 +92,12 @@ get_default_repo() {
 get_core_repo_url() {
   local REPO_URL=$1 ARCH=$2
   if [[ "$ARCH" == arm* || "$ARCH" == aarch64 ]]; then
-    echo "${REPO_URL%/}/$ARCH/core"
+    echo "${REPO_URL%/}/$ARCH/core-3.3"
 
   elif [[ "$ARCH" == power* || "$ARCH" == riscv64 ]]; then
     echo "${REPO_URL%/}"
   else
-    echo "${REPO_URL%/}/core/os/$ARCH"
+    echo "${REPO_URL%/}/core-3.3/os/$ARCH"
   fi
 }
 
@@ -210,6 +210,16 @@ add_user()
 	printf "\n%%wheel    ALL=(ALL) ALL\n$USER    ALL=(ALL) ALL\nDefaults:$USER    \x21authenticate\n" >> "$DEST/etc/sudoers"
 }
 
+to33()
+{
+	local DEST=$1
+	debug "adding repos with \"-3.3\""
+	sed -i "s/\[core\]/\[core-3.3\]/" "$DEST/etc/pacman.conf"
+	sed -i "s/\[community\]/\[community-3.3\]/"  "$DEST/etc/pacman.conf"
+	sed -i "s/\[extra\]/\[extra-3.3\]/" "$DEST/etc/pacman.conf"
+	sed -i "s/\[multilib\]/\[multilib-3.3\]/" "$DEST/etc/pacman.conf"
+}
+
 main() {
   # Process arguments and options
   test $# -eq 0 && set -- "-h"
@@ -257,6 +267,7 @@ main() {
   configure_pacman "$DEST" "$ARCH"
   configure_minimal_system "$DEST"
   [[ -n "$USE_QEMU" ]] && configure_static_qemu "$ARCH" "$DEST"
+  to33 "$DEST"
   install_packages "$ARCH" "$DEST" "${BASIC_PACKAGES[*]} ${EXTRA_PACKAGES[*]}"
   configure_pacman "$DEST" "$ARCH" # Pacman must be re-configured
   add_user $USER
