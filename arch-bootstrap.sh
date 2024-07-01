@@ -253,7 +253,7 @@ main() {
   BASIC_PACKAGES=(
   acl archpower-keyring attr brotli bzip2 curl expat glibc gpgme libarchive
   libassuan libgpg-error libnghttp2 libssh2 lzo openssl pacman xz zlib filesystem
-  krb5 e2fsprogs keyutils libidn2 libunistring gcc-libs lz4 libpsl icu libunistring zstd sudo
+  krb5 e2fsprogs keyutils libidn2 libunistring gcc-libs lz4 libpsl icu libunistring zstd sudo libxml2 libnghttp3
   ca-certificates-utils ca-certificates-mozilla bash readline ncurses coreutils findutils # certificate probleme
   p11-kit libp11-kit libtasn1 libffi # p11-kit and dependances
   )
